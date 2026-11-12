@@ -127,9 +127,18 @@ h1 span { display:block; white-space:nowrap; }
 .stage-label {
   position:absolute; z-index:3; top:18px; left:18px; display:flex; align-items:center; gap:7px;
   padding:6px 10px 6px 8px; background:var(--cream); border:1px solid var(--ink);
-  border-radius:30px; font-size:.75rem; font-weight:800; pointer-events:none;
+  border-radius:30px; font-size:.75rem; font-weight:800; cursor:text;
 }
-.stage-label::before { content:""; width:9px; height:9px; border-radius:50%; background:var(--particle); }
+.stage-label::before { content:""; flex:0 0 9px; height:9px; border-radius:50%; background:var(--particle); }
+.stage-label::after { content:"✎"; color:var(--ink); font-size:1rem; }
+.stage-label:focus-within { outline:2px solid var(--ink); outline-offset:2px; }
+.cat-name {
+  min-width:3.2em; width:7em; max-width:min(42vw,13em); padding:3px 0;
+  border:0; background:transparent; color:inherit; font:inherit; font-size:1rem; outline:none;
+}
+@supports (field-sizing:content) {
+  .cat-name { width:auto; field-sizing:content; }
+}
 .star { position:absolute; font-family:system-ui,sans-serif; line-height:1; font-weight:600; pointer-events:none; }
 .star-one { left:12%; top:34%; color:var(--ink); font-size:clamp(25px,3.1vw,44px); transform:rotate(-10deg); }
 .star-two { right:11%; top:26%; color:var(--ink); font-size:clamp(18px,2.2vw,30px); transform:rotate(9deg); }
@@ -342,7 +351,10 @@ h1 span { display:block; white-space:nowrap; }
     <div class="stage" id="stage">
       <div class="floor" aria-hidden="true"></div>
       <div class="shadow" aria-hidden="true"></div>
-      <span class="stage-label" id="flavor-name">草莓口味</span>
+      <label class="stage-label">
+        <input type="text" class="cat-name" id="cat-name" aria-label="果冻猫名称" value="果冻猫"
+               maxlength="24" autocomplete="off" enterkeyhint="done">
+      </label>
       <span class="star star-one" aria-hidden="true">✦</span><span class="star star-two" aria-hidden="true">✧</span>
       <span class="star star-three" aria-hidden="true">✦</span><span class="star star-four" aria-hidden="true">✧</span>
       <button type="button" class="cat" id="cat" aria-label="戳一戳果冻猫" aria-describedby="cat-instructions">
@@ -424,7 +436,8 @@ h1 span { display:block; white-space:nowrap; }
   const art = document.querySelector("#cat-art");
   const visual = document.querySelector("#cat-visual");
   const canvas = document.querySelector("#cat-canvas");
-  const flavorName = document.querySelector("#flavor-name");
+  const catName = document.querySelector("#cat-name");
+  const nameBadge = catName.closest(".stage-label");
   const flavorButtons = [...document.querySelectorAll(".flavor")];
   const soundButton = document.querySelector("#sound");
   const soundLabel = document.querySelector("#sound-label");
@@ -433,11 +446,11 @@ h1 span { display:block; white-space:nowrap; }
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const restingTransform = "translateY(16.4%)";
   const flavors = {
-    berry: { name:"草莓", note:"草莓果冻，酸酸甜甜。" },
-    mango: { name:"芒果", note:"换上了金灿灿的芒果口味。" },
-    grape: { name:"葡萄", note:"是像葡萄汽水一样的紫色。" },
-    melon: { name:"蜜瓜", note:"蜜瓜口味，像一口夏天。" },
-    custom: { name:"自选颜色" }
+    berry: { note:"草莓果冻，酸酸甜甜。" },
+    mango: { note:"换上了金灿灿的芒果口味。" },
+    grape: { note:"是像葡萄汽水一样的紫色。" },
+    melon: { note:"蜜瓜口味，像一口夏天。" },
+    custom: {}
   };
   const taps = ["啵！它弹回来了。", "软乎乎，再摸一下。", "它好像在偷偷笑。", "嘟噜，抖了两下。"];
   let flavor = "berry";
@@ -1039,7 +1052,7 @@ h1 span { display:block; white-space:nowrap; }
   }
 
   stage.addEventListener("pointerdown", (event) => {
-    if (!painting || pen || event.button !== 0 || (erasing && !strokes.length)) return;
+    if (!painting || pen || event.button !== 0 || nameBadge.contains(event.target) || (erasing && !strokes.length)) return;
     const buffer = prepareSurface();
     if (!buffer) return;
     const point = brushPoint(event);
@@ -1288,7 +1301,6 @@ h1 span { display:block; white-space:nowrap; }
   function chooseFlavor(next, announce = true) {
     flavor = next;
     document.documentElement.dataset.flavor = flavor;
-    flavorName.textContent = flavor === "custom" ? "自选颜色" : flavors[flavor].name + "口味";
     for (const button of flavorButtons) {
       button.setAttribute("aria-pressed", String(button.dataset.choice === flavor));
     }
@@ -1444,11 +1456,22 @@ h1 span { display:block; white-space:nowrap; }
     paintColor.setAttribute("aria-expanded", String(!brushPanel.hidden));
   });
 
+  function normalizedCatName(value) {
+    return value.trim() || catName.defaultValue;
+  }
+  catName.addEventListener("blur", () => {
+    catName.value = normalizedCatName(catName.value);
+  });
+  catName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) catName.blur();
+  });
+
   function restoreSavedCat() {
     let saved;
     try { saved = JSON.parse(document.querySelector("#jelly-save-state").textContent); }
     catch { return; }
     if (saved?.version !== 1) return;
+    if (typeof saved.name === "string") catName.value = normalizedCatName(saved.name.slice(0, catName.maxLength));
 
     const { hue, saturation, value } = saved;
     if ([hue, saturation, value].every(Number.isFinite)) basePicker.set({ hue, saturation, value });
@@ -1478,9 +1501,10 @@ h1 span { display:block; white-space:nowrap; }
   }
 
   function downloadCat() {
+    const name = normalizedCatName(catName.value);
     const { hue, saturation, value } = basePicker.color;
     const snapshot = JSON.stringify({
-      version:1, flavor, hue, saturation, value, count, strokes,
+      version:1, name, flavor, hue, saturation, value, count, strokes,
       brushColor:brushPicker.color.hex, brushSize:Number(paintSize.value)
     }).replace(/</g, "\\u003c");
     const html = exportTemplate.replace(
@@ -1491,7 +1515,8 @@ h1 span { display:block; white-space:nowrap; }
     const link = document.createElement("a");
     link.href = url;
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    link.download = "果冻猫史莱姆-" + timestamp + ".html";
+    const fileName = name.replace(/[<>:"/\\|?*\p{Cc}]/gu, "-").replace(/^[.\s-]+|[.\s-]+$/g, "");
+    link.download = (fileName || catName.defaultValue) + "-" + timestamp + ".html";
     document.body.append(link);
     link.click();
     link.remove();
@@ -1522,6 +1547,7 @@ h1 span { display:block; white-space:nowrap; }
     count = 0;
     countDisplay.value = "0";
     chooseFlavor("berry", false);
+    catName.value = catName.defaultValue;
     reaction.textContent = "它在等你摸摸。";
   });
 })();
