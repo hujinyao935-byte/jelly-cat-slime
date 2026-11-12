@@ -915,7 +915,11 @@ h1 span { display:block; white-space:nowrap; }
 
         const value = Math.max(paint[p], paint[p + 1], paint[p + 2]);
         const tone = (texture[src] * .2126 + texture[src + 1] * .7152 + texture[src + 2] * .0722) / 255;
-        const shaded = value * (.32 + .68 * tone) + (255 - value) * .22 * tone * tone;
+        // Keep the selected value dominant and borrow a restrained light-and-shadow range.
+        const contrast = tone - .48;
+        const lit = value * (.92 + contrast * (contrast < 0 ? .34 : .15));
+        const reflection = (1 - value / 255) * (3 + 27 * tone * tone);
+        const shaded = lit + reflection;
         // Scale channels together so highlights carry the same hue as the shadow.
         // Black keeps only a small neutral reflection from the original texture.
         for (let channel = 0; channel < 3; channel += 1) {
