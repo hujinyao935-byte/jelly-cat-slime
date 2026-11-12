@@ -264,11 +264,10 @@ h1 span { display:block; white-space:nowrap; }
 .wheel-swatch { flex:0 0 13px; height:13px; border:1px solid #223b8b55; border-radius:50%; background:var(--picked-color); }
 @media (max-width:760px) { .color-custom { margin-top:12px; } }
 
-/* Blend dye with the lit texture inside the cat, independently of the stage. */
-.cat-visual { isolation:isolate; }
+/* The dye layer uses the original texture and follows the body deformation. */
 .cat-visual img,.cat-canvas { filter:var(--cat-filter); transition:filter 230ms ease; }
 :root[data-flavor="custom"] :is(.cat-visual img,.cat-canvas) { transition:none; }
-.ink-canvas { position:absolute; inset:-20%; width:140%; height:140%; mix-blend-mode:color; pointer-events:none; }
+.ink-canvas { position:absolute; inset:-20%; width:140%; height:140%; pointer-events:none; }
 .stage.is-painting,.stage.is-painting .cat { cursor:crosshair; touch-action:none; }
 .stage.is-painting .stamp { transform:none; }
 .paint-toggle,.paint-tools button {
@@ -836,23 +835,31 @@ h1 span { display:block; white-space:nowrap; }
 
 
   function drawInkPart(buffer, stroke, to, from) {
-    const { side, padding, ink } = buffer;
+    const { side, padding, size, ink } = buffer;
     const context = ink.source;
     const x = padding + to.u * side;
     const y = padding + to.v * side;
+    const x0 = from ? padding + from.u * side : x;
+    const y0 = from ? padding + from.v * side : y;
     const width = side * stroke.width;
     context.globalCompositeOperation = stroke.erase ? "destination-out" : "source-over";
     context.fillStyle = context.strokeStyle = stroke.color;
     context.lineWidth = width;
     context.beginPath();
     if (from) {
-      context.moveTo(padding + from.u * side, padding + from.v * side);
+      context.moveTo(x0, y0);
       context.lineTo(x, y);
       context.stroke();
     } else {
       context.arc(x, y, width / 2, 0, Math.PI * 2);
       context.fill();
     }
+    const reach = width / 2 + 1;
+    const left = Math.max(0, Math.floor(Math.min(x0, x) - reach));
+    const top = Math.max(0, Math.floor(Math.min(y0, y) - reach));
+    const right = Math.min(size, Math.ceil(Math.max(x0, x) + reach));
+    const bottom = Math.min(size, Math.ceil(Math.max(y0, y) + reach));
+    return { x:left, y:top, width:right - left, height:bottom - top };
   }
 
   function dyeMask(buffer, expression) {
@@ -861,18 +868,8 @@ h1 span { display:block; white-space:nowrap; }
     const mask = document.createElement("canvas");
     mask.width = mask.height = size;
     const context = mask.getContext("2d");
-    if (!ink.material) {
-      // The brightest, least colored reflections take up less dye.
-      ink.material = context.createImageData(size, size);
-      const pixels = ink.material.data;
-      for (let p = 0; p < original.length; p += 4) {
-        const white = Math.min(original[p], original[p + 1], original[p + 2]);
-        const gloss = Math.max(0, Math.min(1, (white - 155) / 82));
-        pixels[p + 3] = original[p + 3] * (1 - gloss * gloss * (3 - 2 * gloss));
-      }
-      ink.profiles = faceMarks.map((mark) => sampleMark(mark, buffer));
-    }
-    context.putImageData(ink.material, 0, 0);
+    context.putImageData(new ImageData(original, size, size), 0, 0);
+    ink.profiles ??= faceMarks.map((mark) => sampleMark(mark, buffer));
     context.globalCompositeOperation = "destination-out";
     context.lineCap = context.lineJoin = "round";
     const bentMarks = expression === "drag" ? 3 : expression === "tap" ? 2 : 0;
@@ -894,18 +891,39 @@ h1 span { display:block; white-space:nowrap; }
         context.fillRect(profile.x0 + column - 1, top - 2, 3, bottom - top + 5);
       }
     }
-    ink.masks.set(expression, mask);
-    return mask;
+    const pixels = context.getImageData(0, 0, size, size).data;
+    ink.masks.set(expression, pixels);
+    return pixels;
   }
 
-  function renderInk(buffer, expression = "rest") {
+  function renderInk(buffer, expression = "rest", region) {
     const { size, ink } = buffer;
-    const context = ink.display;
-    context.clearRect(0, 0, size, size);
-    context.drawImage(ink.source.canvas, 0, 0);
-    context.globalCompositeOperation = "destination-in";
-    context.drawImage(dyeMask(buffer, expression), 0, 0);
-    context.globalCompositeOperation = "source-over";
+    const { x = 0, y = 0, width = size, height = size } = region ?? {};
+    if (width <= 0 || height <= 0) return;
+    const sample = ink.source.getImageData(x, y, width, height);
+    const paint = sample.data;
+    const mask = dyeMask(buffer, expression);
+    const texture = buffer.faces.get(expression) ?? buffer.original;
+
+    for (let row = 0; row < height; row += 1) {
+      for (let column = 0; column < width; column += 1) {
+        const p = (row * width + column) * 4;
+        if (!paint[p + 3]) continue;
+        const src = ((y + row) * size + x + column) * 4;
+        paint[p + 3] *= mask[src + 3] / 255;
+        if (!paint[p + 3]) continue;
+
+        const value = Math.max(paint[p], paint[p + 1], paint[p + 2]);
+        const tone = (texture[src] * .2126 + texture[src + 1] * .7152 + texture[src + 2] * .0722) / 255;
+        const shaded = value * (.32 + .68 * tone) + (255 - value) * .22 * tone * tone;
+        // Scale channels together so highlights carry the same hue as the shadow.
+        // Black keeps only a small neutral reflection from the original texture.
+        for (let channel = 0; channel < 3; channel += 1) {
+          paint[p + channel] = value ? paint[p + channel] / value * shaded : shaded;
+        }
+      }
+    }
+    ink.display.putImageData(sample, x, y);
     ink.expression = expression;
     ink.texture = null;
     ink.warped = null;
@@ -922,7 +940,7 @@ h1 span { display:block; white-space:nowrap; }
     if (!buffer.ink) {
       const source = document.createElement("canvas");
       source.width = source.height = inkCanvas.width = inkCanvas.height = size;
-      const context = source.getContext("2d");
+      const context = source.getContext("2d", { willReadFrequently:true });
       context.lineCap = "round";
       context.rect(padding, padding, side, side);
       context.clip();
@@ -1014,8 +1032,8 @@ h1 span { display:block; white-space:nowrap; }
     stage.setPointerCapture(pen.id);
     if (!buffer.ink) rebuildInk(buffer);
     else {
-      drawInkPart(buffer, stroke, point);
-      renderInk(buffer);
+      const region = drawInkPart(buffer, stroke, point);
+      renderInk(buffer, "rest", region);
     }
     syncPaintHistory();
   });
@@ -1029,8 +1047,8 @@ h1 span { display:block; white-space:nowrap; }
     const previous = stroke.points.at(-1);
     if (Math.hypot(point.u - previous.u, point.v - previous.v) < .0015) return;
     stroke.points.push(point);
-    drawInkPart(buffer, stroke, point, previous);
-    renderInk(buffer);
+    const region = drawInkPart(buffer, stroke, point, previous);
+    renderInk(buffer, "rest", region);
   });
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
     stage.addEventListener(type, (event) => {
