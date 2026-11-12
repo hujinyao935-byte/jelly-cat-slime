@@ -204,46 +204,81 @@ h1 span { display:block; white-space:nowrap; }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important; } }
 :root[data-flavor="custom"] {
   --ray:hsl(var(--custom-hue) 70% 84%); --ray-light:hsl(var(--custom-hue) 73% 93%);
-  --floor:hsl(var(--custom-hue) 58% 73%); --particle:hsl(var(--custom-hue) 63% 55%);
-  --cat-filter:hue-rotate(var(--custom-rotation)) saturate(.92);
+  --floor:hsl(var(--custom-hue) 58% 73%); --particle:var(--picked-color);
+  --cat-filter:url(#jelly-hsv-tint);
 }
 :root[data-flavor="custom"] .cat-visual { transition:none; }
+:root[data-flavor="custom"] .stage-label::before { box-shadow:inset 0 0 0 1px #223b8b55; }
 .color-custom { margin-top:15px; max-width:356px; }
 .color-custom summary {
-  width:max-content; max-width:100%; min-height:40px; display:flex; align-items:center; gap:8px;
+  width:max-content; max-width:100%; min-height:44px; display:flex; align-items:center; gap:8px;
   list-style:none; border:1px solid var(--ink); border-radius:22px; padding:6px 11px;
   background:var(--cream); cursor:pointer; font-size:.81rem; font-weight:760;
 }
 .color-custom summary::-webkit-details-marker { display:none; }
-.color-custom summary:focus-visible,.color-wheel:focus-visible { outline:3px solid var(--ink-dark); outline-offset:4px; }
+.color-custom :is(summary,.color-wheel,input):focus-visible { outline:3px solid var(--ink-dark); outline-offset:4px; }
 .color-custom summary::after { content:""; width:6px; height:6px; margin:0 3px 3px 5px; border:solid currentColor; border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
 .color-custom[open] summary::after { transform:rotate(225deg); margin-bottom:-3px; }
 :root[data-flavor="custom"] .color-custom summary { box-shadow:0 2px 0 var(--ink); }
 .wheel-icon { width:16px; height:16px; border-radius:50%; background:conic-gradient(#ed5e72,#f7c059,#9bce75,#6acecf,#7c97ef,#d98be2,#ed5e72); }
-:root[data-flavor="custom"] .wheel-icon { background:hsl(var(--custom-hue) 68% 60%); }
-.wheel-panel { display:flex; align-items:center; gap:17px; padding:12px 0 2px; }
+:root[data-flavor="custom"] .wheel-icon { background:var(--picked-color); box-shadow:inset 0 0 0 1px #223b8b55; }
+.wheel-panel {
+  --picker-hue:205; --picked-color:#46a6eb; --wheel-angle:205deg;
+  display:grid; grid-template-columns: minmax(120px,148px) minmax(0,1fr);
+  align-items:center; gap:10px clamp(10px,2vw,18px); padding:14px 0 2px;
+}
+.hsv-picker { position:relative; aspect-ratio:1; }
 .color-wheel {
-  --wheel-angle:205deg; --wheel-hue:205; position:relative; flex:0 0 116px; width:116px; height:116px;
-  border-radius:50%; cursor:crosshair; touch-action:none; user-select:none;
-  background:conic-gradient(hsl(0 83% 63%),hsl(60 83% 63%),hsl(120 70% 59%),hsl(180 72% 58%),hsl(240 77% 67%),hsl(300 70% 66%),hsl(360 83% 63%));
+  position:absolute; inset:0; border-radius:50%; cursor:crosshair; touch-action:none; user-select:none;
+  background:conic-gradient(#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);
   box-shadow:inset 0 0 0 1px #223b8b42;
 }
 .color-wheel::before {
-  content:""; position:absolute; inset:22px; border:4px solid var(--cream); border-radius:50%;
-  background:radial-gradient(ellipse at 31% 25%,#fff9 0 9%,transparent 33%),hsl(var(--wheel-hue) 69% 61%);
-  box-shadow:inset 0 -7px 14px #14235725,0 0 0 1px #223b8b30; pointer-events:none;
+  content:""; position:absolute; inset:13%; border-radius:50%;
+  background:var(--cream); box-shadow:0 0 0 1px #223b8b30; pointer-events:none;
+}
+.wheel-marker,.sv-marker {
+  position:absolute; width:14px; height:14px; border:2px solid #fffbee;
+  border-radius:50%; box-shadow:0 0 0 1.5px var(--ink); pointer-events:none;
 }
 .wheel-marker {
-  position:absolute; top:50%; left:50%; width:15px; height:15px; border:2px solid var(--ink);
-  border-radius:50%; background:#fffbee; box-shadow:0 1px 3px #172b6b77; pointer-events:none;
-  transform:translate(-50%,-50%) rotate(var(--wheel-angle)) translateY(-47px);
+  left:50%; top:0; width:100%; height:100%; border:0; box-shadow:none;
+  transform:translateX(-50%) rotate(var(--wheel-angle));
 }
-.wheel-copy { margin:0; font-size:.8rem; line-height:1.65; font-weight:680; }
-.wheel-copy output { display:block; font-size:.74rem; color:#3e5190; font-variant-numeric:tabular-nums; }
+.wheel-marker::after {
+  content:""; position:absolute; left:50%; top:6.5%; width:14px; height:14px;
+  border:2px solid #fffbee; border-radius:50%; box-shadow:0 0 0 1.5px var(--ink);
+  transform:translate(-50%,-50%);
+}
+.sv-plane {
+  --picker-s:70%; --picker-y:8%; position:absolute; inset:24%; border-radius:7px;
+  cursor:crosshair; touch-action:none; user-select:none;
+  background:linear-gradient(0deg,#000,transparent),linear-gradient(90deg,#fff,transparent),hsl(var(--picker-hue) 100% 50%);
+  box-shadow:0 0 0 1px #223b8b55;
+}
+.sv-marker { left:var(--picker-s); top:var(--picker-y); transform:translate(-50%,-50%); }
+.wheel-controls { display:grid; gap:2px; }
+.wheel-controls label { display:grid; font-size:.76rem; font-weight:760; }
+.wheel-controls input { width:100%; height:32px; margin:0; cursor:pointer; accent-color:var(--ink); }
+.wheel-copy { grid-column:1/-1; margin:0; font-size:.76rem; line-height:1.55; color:var(--ink); }
+.wheel-readout { display:flex; gap:6px; align-items:center; font-size:.73rem; font-variant-numeric:tabular-nums; }
+.wheel-swatch { flex:0 0 13px; height:13px; border:1px solid #223b8b55; border-radius:50%; background:var(--picked-color); }
 @media (max-width:760px) { .color-custom { margin-top:12px; } }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="jelly-hsv-tint" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  .2126 .7152 .0722 0 0  0 0 0 1 0"/>
+      <feComponentTransfer>
+        <feFuncR id="tint-r" type="table" tableValues="0 .17 .27 .62 1"/>
+        <feFuncG id="tint-g" type="table" tableValues="0 .31 .65 .81 1"/>
+        <feFuncB id="tint-b" type="table" tableValues="0 .43 .92 .96 1"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+</svg>
 <header class="frame masthead">
   <div class="wordmark"><span class="logo-icon" aria-hidden="true"><i></i></span> Jelly Parlor</div>
   <button type="button" class="sound" id="sound" aria-pressed="false">
@@ -286,13 +321,23 @@ h1 span { display:block; white-space:nowrap; }
       <button type="button" class="flavor" data-choice="melon" aria-pressed="false"><span class="gem" aria-hidden="true"></span>蜜瓜</button>
     </div>
     <details class="color-custom" id="color-custom">
-      <summary><span class="wheel-icon" aria-hidden="true"></span>色环选色</summary>
-      <div class="wheel-panel">
-        <div class="color-wheel" id="color-wheel" role="slider" tabindex="0" aria-label="果冻猫色相"
-             aria-valuemin="0" aria-valuemax="359" aria-valuenow="205" aria-valuetext="青蓝，205 度">
-          <span class="wheel-marker" aria-hidden="true"></span>
+      <summary><span class="wheel-icon" aria-hidden="true"></span>HSV 色环选色</summary>
+      <div class="wheel-panel" id="wheel-panel">
+        <div class="hsv-picker">
+          <div class="color-wheel" id="color-wheel" role="slider" tabindex="0" aria-label="果冻猫色相"
+               aria-valuemin="0" aria-valuemax="359" aria-valuenow="205" aria-valuetext="205 度">
+            <span class="wheel-marker" aria-hidden="true"></span>
+          </div>
+          <div class="sv-plane" id="sv-plane" aria-hidden="true">
+            <span class="sv-marker"></span>
+          </div>
         </div>
-        <p class="wheel-copy">沿色环拖动选色<output id="wheel-color" aria-live="off">青蓝 · 205°</output></p>
+        <div class="wheel-controls">
+          <label>饱和度 <input id="picker-saturation" type="range" min="0" max="100" value="70"></label>
+          <label>明度 <input id="picker-value" type="range" min="0" max="100" value="92"></label>
+          <div class="wheel-readout"><span class="wheel-swatch" aria-hidden="true"></span><output id="wheel-color" aria-live="off">#46A6EB</output></div>
+        </div>
+        <p class="wheel-copy">外圈选颜色，方块左右调浓淡、上下调明暗。</p>
       </div>
     </details>
   </section>
@@ -916,60 +961,119 @@ h1 span { display:block; white-space:nowrap; }
   }
 
   const wheel = document.querySelector("#color-wheel");
+  const wheelPanel = document.querySelector("#wheel-panel");
+  const svPlane = document.querySelector("#sv-plane");
+  const saturationInput = document.querySelector("#picker-saturation");
+  const valueInput = document.querySelector("#picker-value");
   const wheelColor = document.querySelector("#wheel-color");
+  const tintChannels = ["r", "g", "b"].map((channel) => document.querySelector("#tint-" + channel));
   let customHue = 205;
-  let wheelPointer = null;
-  const hueNames = ["红色","橙色","黄色","黄绿","绿色","薄荷绿","青色","青蓝","蓝色","蓝紫","紫色","玫红"];
-  const hueRotation = [1,2,3,4,6,7,8,9,10,11,13,14,15,16,18,19,20,22,23,24,26,27,28,30,31,32,34,35,36,38,39,40,42,43,44,46,47,48,49,51,52,53,54,55,57,58,59,60,61,62,63,64,65,66,67,68,69,69,70,71,72,72,73,74,75,75,76,77,78,79,79,80,81,82,83,84,84,85,86,87,88,89,90,91,92,92,93,94,95,96,97,98,99,100,101,102,103,104,104,105,106,107,108,109,109,110,111,112,112,113,114,115,115,116,117,118,118,119,120,120,121,122,122,123,124,125,125,126,127,128,129,129,130,131,132,133,134,135,135,136,137,138,139,140,141,142,143,144,146,147,148,149,151,152,153,154,155,157,158,159,160,161,162,163,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,187,188,189,190,191,193,194,195,196,198,199,200,202,203,204,206,207,208,210,211,212,214,215,216,218,219,220,222,223,224,226,227,228,229,231,232,233,234,235,236,238,239,240,241,242,243,244,245,246,247,247,248,249,250,251,252,252,253,254,255,256,257,257,258,259,260,261,262,262,263,264,265,266,267,268,269,270,270,271,272,273,274,275,276,277,277,278,279,280,281,282,283,284,284,285,286,287,288,289,289,290,291,292,292,293,294,295,295,296,297,298,298,299,300,300,301,302,302,303,304,305,305,306,307,308,309,309,310,311,312,313,314,315,315,316,317,318,319,320,321,322,323,324,325,327,328,329,330,331,332,333,334,335,337,338,339,340,341,342,344,345,346,347,348,349,350,352,353,354,355,356,357,358,359,0];
+  let customSaturation = Number(saturationInput.value);
+  let customValue = Number(valueInput.value);
 
-  function pickHue(value) {
-    const firstCustom = flavor !== "custom";
-    customHue = (Math.round(value) + 360) % 360;
-    const color = hueNames[Math.floor((customHue + 15) / 30) % hueNames.length];
+  function hsvToRgb(hue, saturation, value) {
+    const chroma = value * saturation;
+    const intermediate = chroma * (1 - Math.abs((hue / 60) % 2 - 1));
+    const channels = [
+      [chroma, intermediate, 0], [intermediate, chroma, 0], [0, chroma, intermediate],
+      [0, intermediate, chroma], [intermediate, 0, chroma], [chroma, 0, intermediate]
+    ];
+    return channels[Math.floor(hue / 60)].map((channel) => channel + value - chroma);
+  }
+
+  function updatePicker() {
+    const rgb = hsvToRgb(customHue, customSaturation / 100, customValue / 100);
+    const hex = "#" + rgb.map((channel) =>
+      Math.round(channel * 255).toString(16).padStart(2, "0")
+    ).join("").toUpperCase();
     const root = document.documentElement;
     root.style.setProperty("--custom-hue", String(customHue));
-    root.style.setProperty("--custom-rotation", hueRotation[customHue] + "deg");
-    wheel.style.setProperty("--wheel-hue", String(customHue));
-    wheel.style.setProperty("--wheel-angle", customHue + "deg");
+    root.style.setProperty("--picked-color", hex);
+    wheelPanel.style.setProperty("--picked-color", hex);
+    wheelPanel.style.setProperty("--picker-hue", String(customHue));
+    wheelPanel.style.setProperty("--wheel-angle", customHue + "deg");
+    svPlane.style.setProperty("--picker-s", customSaturation + "%");
+    svPlane.style.setProperty("--picker-y", (100 - customValue) + "%");
     wheel.setAttribute("aria-valuenow", String(customHue));
-    wheel.setAttribute("aria-valuetext", color + "，" + customHue + " 度");
-    wheelColor.value = color + " · " + customHue + "°";
-    if (firstCustom) {
+    wheel.setAttribute("aria-valuetext", customHue + " 度");
+    saturationInput.value = String(customSaturation);
+    valueInput.value = String(customValue);
+    wheelColor.value = hex;
+
+    // Map the texture's shadows, body and highlights separately, preserving its alpha.
+    for (const [index, channel] of rgb.entries()) {
+      const body = .045 + .86 * channel;
+      const shadow = body * .42;
+      const highlight = body + (1 - body) * .48;
+      tintChannels[index].setAttribute("tableValues", [0, shadow, body, highlight, 1].join(" "));
+    }
+  }
+
+  function pickColor(hue, saturation, value) {
+    customHue = (Math.round(hue) % 360 + 360) % 360;
+    customSaturation = Math.round(Math.min(100, Math.max(0, saturation)));
+    customValue = Math.round(Math.min(100, Math.max(0, value)));
+    updatePicker();
+    if (flavor !== "custom") {
       chooseFlavor("custom", false);
       reaction.textContent = "果冻猫换上了你选的颜色。";
       stopSound();
     }
   }
 
-  function pickWheelPoint(event) {
-    const box = wheel.getBoundingClientRect();
-    const x = event.clientX - (box.left + box.width / 2);
-    const y = event.clientY - (box.top + box.height / 2);
-    if (Math.hypot(x, y) < box.width * .12) return;
-    pickHue(Math.atan2(x, -y) * 180 / Math.PI);
+  function trackPickerPointer(control, onPoint, canStart = () => true) {
+    let pointerId = null;
+    control.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || pointerId !== null || !canStart(event)) return;
+      pointerId = event.pointerId;
+      control.setPointerCapture(pointerId);
+      onPoint(event);
+    });
+    control.addEventListener("pointermove", (event) => {
+      if (pointerId === event.pointerId) onPoint(event);
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      control.addEventListener(type, (event) => {
+        if (pointerId === event.pointerId) pointerId = null;
+      });
+    }
   }
 
-  wheel.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || wheelPointer !== null) return;
-    wheelPointer = event.pointerId;
-    wheel.setPointerCapture(event.pointerId);
-    pickWheelPoint(event);
-  });
-  wheel.addEventListener("pointermove", (event) => {
-    if (wheelPointer === event.pointerId) pickWheelPoint(event);
-  });
-  function releaseWheel(event) {
-    if (wheelPointer === event.pointerId) wheelPointer = null;
+  function wheelPoint(event) {
+    const box = wheel.getBoundingClientRect();
+    return {
+      x: event.clientX - (box.left + box.width / 2),
+      y: event.clientY - (box.top + box.height / 2),
+      radius: box.width / 2
+    };
   }
-  wheel.addEventListener("pointerup", releaseWheel);
-  wheel.addEventListener("pointercancel", releaseWheel);
-  wheel.addEventListener("lostpointercapture", releaseWheel);
+  trackPickerPointer(wheel, (event) => {
+    const { x, y, radius } = wheelPoint(event);
+    if (Math.hypot(x, y) < radius * .22) return;
+    pickColor(Math.atan2(x, -y) * 180 / Math.PI, customSaturation, customValue);
+  }, (event) => {
+    const { x, y, radius } = wheelPoint(event);
+    return Math.hypot(x, y) >= radius * .74;
+  });
+
+  trackPickerPointer(svPlane, (event) => {
+    const box = svPlane.getBoundingClientRect();
+    const saturation = (event.clientX - box.left) / box.width * 100;
+    const value = (1 - (event.clientY - box.top) / box.height) * 100;
+    pickColor(customHue, saturation, value);
+  });
+
+  const pickSliders = () => pickColor(customHue, Number(saturationInput.value), Number(valueInput.value));
+  saturationInput.addEventListener("input", pickSliders);
+  valueInput.addEventListener("input", pickSliders);
   wheel.addEventListener("keydown", (event) => {
     const increment = { ArrowRight:1, ArrowUp:1, ArrowLeft:-1, ArrowDown:-1, PageUp:15, PageDown:-15 }[event.key];
     if (increment === undefined && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
-    pickHue(event.key === "Home" ? 0 : event.key === "End" ? 359 : customHue + increment * (event.shiftKey ? 10 : 1));
+    const hue = event.key === "Home" ? 0 : event.key === "End" ? 359 : customHue + increment * (event.shiftKey ? 10 : 1);
+    pickColor(hue, customSaturation, customValue);
   });
+  updatePicker();
 
   soundButton.addEventListener("click", () => {
     stopSound();
