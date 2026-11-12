@@ -290,15 +290,16 @@ h1 span { display:block; white-space:nowrap; }
   font-size:.78rem; font-weight:740;
 }
 .paint-tools[hidden] { display:none; }
-.paint-tools label { display:inline-flex; min-height:44px; align-items:center; gap:6px; }
-.paint-tools input[type="color"] {
-  appearance:none; width:38px; height:38px; padding:3px; border:1px solid var(--ink);
-  border-radius:50%; background:transparent; cursor:pointer;
+.paint-tools > label { display:inline-flex; min-height:44px; align-items:center; gap:6px; }
+.paint-tools .brush-color { display:inline-flex; align-items:center; gap:6px; }
+.brush-color .wheel-swatch { background:var(--brush-color,#fff4c7); }
+.paint-tools .brush-wheel-panel {
+  flex:0 0 100%; grid-template-columns:minmax(120px,148px) minmax(0,190px);
+  border-top:1px dashed #223b8b72; padding:10px 3px 2px;
 }
-.paint-tools input[type="color"]::-webkit-color-swatch-wrapper { padding:0; }
-.paint-tools input[type="color"]::-webkit-color-swatch { border:0; border-radius:50%; }
-.paint-tools input[type="color"]::-moz-color-swatch { border:0; border-radius:50%; }
-.paint-tools input[type="range"] { width:clamp(62px,9vw,95px); height:38px; margin:0; accent-color:var(--ink); }
+.brush-wheel-panel[hidden] { display:none; }
+.paint-tools .color-wheel:focus-visible { outline:3px solid var(--ink); outline-offset:4px; }
+.paint-tools > label input[type="range"] { width:clamp(62px,9vw,95px); height:38px; margin:0; accent-color:var(--ink); }
 .paint-tools button:disabled { opacity:.5; cursor:default; }
 .paint-toggle:focus-visible,.paint-tools :is(button,input):focus-visible { outline:3px solid var(--ink); outline-offset:3px; }
 @media (max-width:760px) {
@@ -360,11 +361,28 @@ h1 span { display:block; white-space:nowrap; }
       <button type="button" class="reset" id="reset">重置</button>
     </div>
     <div class="paint-tools" id="paint-tools" role="group" aria-label="彩绘工具" hidden>
-      <label>笔色 <input id="paint-color" type="color" value="#fff4c7"></label>
+      <button type="button" class="brush-color" id="paint-color" aria-controls="brush-wheel-panel" aria-expanded="false"><span class="wheel-swatch" aria-hidden="true"></span>笔色</button>
       <label>粗细 <input id="paint-size" type="range" min="6" max="82" value="30"></label>
       <button type="button" id="paint-eraser" aria-pressed="false">橡皮擦</button>
       <button type="button" id="paint-undo" disabled>撤销</button>
       <button type="button" id="paint-clear" disabled>清空彩绘</button>
+      <div class="wheel-panel brush-wheel-panel" id="brush-wheel-panel" hidden>
+        <div class="hsv-picker">
+          <div class="color-wheel" id="brush-color-wheel" role="slider" tabindex="0" aria-label="彩绘笔色色相"
+               aria-valuemin="0" aria-valuemax="359" aria-valuenow="205" aria-valuetext="205 度">
+            <span class="wheel-marker" aria-hidden="true"></span>
+          </div>
+          <div class="sv-plane" id="brush-sv-plane" aria-hidden="true">
+            <span class="sv-marker"></span>
+          </div>
+        </div>
+        <div class="wheel-controls">
+          <label>饱和度 <input id="brush-picker-saturation" type="range" min="0" max="100" value="70"></label>
+          <label>明度 <input id="brush-picker-value" type="range" min="0" max="100" value="92"></label>
+          <div class="wheel-readout"><span class="wheel-swatch" aria-hidden="true"></span><output id="brush-wheel-color" aria-live="off">#46A6EB</output></div>
+        </div>
+        <p class="wheel-copy">外圈选颜色，方块左右调浓淡、上下调明暗。</p>
+      </div>
     </div>
   </section>
   <section class="tasting" aria-labelledby="tasting-title">
@@ -376,7 +394,7 @@ h1 span { display:block; white-space:nowrap; }
       <button type="button" class="flavor" data-choice="melon" aria-pressed="false"><span class="gem" aria-hidden="true"></span>蜜瓜</button>
     </div>
     <details class="color-custom" id="color-custom">
-      <summary><span class="wheel-icon" aria-hidden="true"></span>HSV 色环选色</summary>
+      <summary><span class="wheel-icon" aria-hidden="true"></span>底色选色</summary>
       <div class="wheel-panel" id="wheel-panel">
         <div class="hsv-picker">
           <div class="color-wheel" id="color-wheel" role="slider" tabindex="0" aria-label="果冻猫色相"
@@ -1014,20 +1032,6 @@ h1 span { display:block; white-space:nowrap; }
     erasing = !erasing;
     paintEraser.setAttribute("aria-pressed", String(erasing));
   });
-  paintColor.addEventListener("input", () => {
-    erasing = false;
-    paintEraser.setAttribute("aria-pressed", "false");
-  });
-  paintUndo.addEventListener("click", () => {
-    strokes.pop();
-    if (surface) rebuildInk(surface);
-    syncPaintHistory();
-  });
-  paintClear.addEventListener("click", () => {
-    strokes.length = 0;
-    if (surface) rebuildInk(surface);
-    syncPaintHistory();
-  });
 
   function brushPoint(event) {
     const { u, v } = touchOrigin(event.clientX, event.clientY);
@@ -1043,7 +1047,7 @@ h1 span { display:block; white-space:nowrap; }
     const x = Math.floor(padding + point.u * side);
     const y = Math.floor(padding + point.v * side);
     if (x < 0 || x >= size || y < 0 || y >= size || original[(y * size + x) * 4 + 3] < 30) return;
-    const stroke = { color:paintColor.value, width:Number(paintSize.value) / 1000, erase:erasing, points:[point] };
+    const stroke = { color:brushPicker.color.hex, width:Number(paintSize.value) / 1000, erase:erasing, points:[point] };
     strokes.push(stroke);
     pen = { id:event.pointerId, stroke };
     stage.setPointerCapture(pen.id);
@@ -1298,17 +1302,6 @@ h1 span { display:block; white-space:nowrap; }
     button.addEventListener("click", () => chooseFlavor(button.dataset.choice));
   }
 
-  const wheel = document.querySelector("#color-wheel");
-  const wheelPanel = document.querySelector("#wheel-panel");
-  const svPlane = document.querySelector("#sv-plane");
-  const saturationInput = document.querySelector("#picker-saturation");
-  const valueInput = document.querySelector("#picker-value");
-  const wheelColor = document.querySelector("#wheel-color");
-  const tintChannels = ["r", "g", "b"].map((channel) => document.querySelector("#tint-" + channel));
-  let customHue = 205;
-  let customSaturation = Number(saturationInput.value);
-  let customValue = Number(valueInput.value);
-
   function hsvToRgb(hue, saturation, value) {
     const chroma = value * saturation;
     const intermediate = chroma * (1 - Math.abs((hue / 60) % 2 - 1));
@@ -1317,46 +1310,6 @@ h1 span { display:block; white-space:nowrap; }
       [0, intermediate, chroma], [intermediate, 0, chroma], [chroma, 0, intermediate]
     ];
     return channels[Math.floor(hue / 60)].map((channel) => channel + value - chroma);
-  }
-
-  function updatePicker() {
-    const rgb = hsvToRgb(customHue, customSaturation / 100, customValue / 100);
-    const hex = "#" + rgb.map((channel) =>
-      Math.round(channel * 255).toString(16).padStart(2, "0")
-    ).join("").toUpperCase();
-    const root = document.documentElement;
-    root.style.setProperty("--custom-hue", String(customHue));
-    root.style.setProperty("--picked-color", hex);
-    wheelPanel.style.setProperty("--picked-color", hex);
-    wheelPanel.style.setProperty("--picker-hue", String(customHue));
-    wheelPanel.style.setProperty("--wheel-angle", customHue + "deg");
-    svPlane.style.setProperty("--picker-s", customSaturation + "%");
-    svPlane.style.setProperty("--picker-y", (100 - customValue) + "%");
-    wheel.setAttribute("aria-valuenow", String(customHue));
-    wheel.setAttribute("aria-valuetext", customHue + " 度");
-    saturationInput.value = String(customSaturation);
-    valueInput.value = String(customValue);
-    wheelColor.value = hex;
-
-    // Map the texture's shadows, body and highlights separately, preserving its alpha.
-    for (const [index, channel] of rgb.entries()) {
-      const body = .045 + .86 * channel;
-      const shadow = body * .42;
-      const highlight = body + (1 - body) * .48;
-      tintChannels[index].setAttribute("tableValues", [0, shadow, body, highlight, 1].join(" "));
-    }
-  }
-
-  function pickColor(hue, saturation, value) {
-    customHue = (Math.round(hue) % 360 + 360) % 360;
-    customSaturation = Math.round(Math.min(100, Math.max(0, saturation)));
-    customValue = Math.round(Math.min(100, Math.max(0, value)));
-    updatePicker();
-    if (flavor !== "custom") {
-      chooseFlavor("custom", false);
-      reaction.textContent = "果冻猫换上了你选的颜色。";
-      stopSound();
-    }
   }
 
   function trackPickerPointer(control, onPoint, canStart = () => true) {
@@ -1377,40 +1330,120 @@ h1 span { display:block; white-space:nowrap; }
     }
   }
 
-  function wheelPoint(event) {
-    const box = wheel.getBoundingClientRect();
-    return {
-      x: event.clientX - (box.left + box.width / 2),
-      y: event.clientY - (box.top + box.height / 2),
-      radius: box.width / 2
-    };
+  function hexToHsv(hex) {
+    const [r,g,b] = [1,3,5].map((start) => parseInt(hex.slice(start, start + 2), 16) / 255);
+    const max = Math.max(r,g,b), chroma = max - Math.min(r,g,b);
+    let hue = 0;
+    if (chroma) {
+      if (max === r) hue = (g - b) / chroma;
+      else if (max === g) hue = (b - r) / chroma + 2;
+      else hue = (r - g) / chroma + 4;
+    }
+    return { hue:(hue * 60 + 360) % 360, saturation:max ? 100 * chroma / max : 0, value:100 * max };
   }
-  trackPickerPointer(wheel, (event) => {
-    const { x, y, radius } = wheelPoint(event);
-    if (Math.hypot(x, y) < radius * .22) return;
-    pickColor(Math.atan2(x, -y) * 180 / Math.PI, customSaturation, customValue);
-  }, (event) => {
-    const { x, y, radius } = wheelPoint(event);
-    return Math.hypot(x, y) >= radius * .74;
+
+  function createHsvPicker(panel, initial, onUpdate, onPick) {
+    const wheel = panel.querySelector(".color-wheel");
+    const plane = panel.querySelector(".sv-plane");
+    const [saturationInput, valueInput] = panel.querySelectorAll("input");
+    const output = panel.querySelector("output");
+    let color;
+    function set({ hue, saturation, value }) {
+      hue = (hue % 360 + 360) % 360;
+      saturation = Math.min(100, Math.max(0, saturation));
+      value = Math.min(100, Math.max(0, value));
+      const rgb = hsvToRgb(hue, saturation / 100, value / 100);
+      const hex = "#" + rgb.map((channel) =>
+        Math.round(channel * 255).toString(16).padStart(2, "0")
+      ).join("").toUpperCase();
+      color = { hue, saturation, value, hex };
+      panel.style.setProperty("--picked-color", hex);
+      panel.style.setProperty("--picker-hue", String(hue));
+      panel.style.setProperty("--wheel-angle", hue + "deg");
+      plane.style.setProperty("--picker-s", saturation + "%");
+      plane.style.setProperty("--picker-y", (100 - value) + "%");
+      const degrees = Math.round(hue) % 360;
+      wheel.setAttribute("aria-valuenow", String(degrees));
+      wheel.setAttribute("aria-valuetext", degrees + " 度");
+      saturationInput.value = String(Math.round(saturation));
+      valueInput.value = String(Math.round(value));
+      output.value = hex;
+      onUpdate(color, rgb);
+    }
+
+    function pick(changes) {
+      set({ ...color, ...changes });
+      onPick();
+    }
+
+    function wheelPoint(event) {
+      const box = wheel.getBoundingClientRect();
+      return {
+        x:event.clientX - (box.left + box.width / 2),
+        y:event.clientY - (box.top + box.height / 2),
+        radius:box.width / 2
+      };
+    }
+    trackPickerPointer(wheel, (event) => {
+      const { x, y, radius } = wheelPoint(event);
+      if (Math.hypot(x, y) < radius * .22) return;
+      pick({ hue:Math.round(Math.atan2(x, -y) * 180 / Math.PI) });
+    }, (event) => {
+      const { x, y, radius } = wheelPoint(event);
+      return Math.hypot(x, y) >= radius * .74;
+    });
+    trackPickerPointer(plane, (event) => {
+      const box = plane.getBoundingClientRect();
+      pick({
+        saturation:Math.round((event.clientX - box.left) / box.width * 100),
+        value:Math.round((1 - (event.clientY - box.top) / box.height) * 100)
+      });
+    });
+    saturationInput.addEventListener("input", () => pick({ saturation:Number(saturationInput.value) }));
+    valueInput.addEventListener("input", () => pick({ value:Number(valueInput.value) }));
+    wheel.addEventListener("keydown", (event) => {
+      const increment = { ArrowRight:1, ArrowUp:1, ArrowLeft:-1, ArrowDown:-1, PageUp:15, PageDown:-15 }[event.key];
+      if (increment === undefined && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault();
+      const hue = event.key === "Home" ? 0 : event.key === "End" ? 359 : color.hue + increment * (event.shiftKey ? 10 : 1);
+      pick({ hue:Math.round(hue) });
+    });
+    set(initial);
+    return { set, get color() { return color; } };
+  }
+
+  const tintChannels = ["r", "g", "b"].map((channel) => document.querySelector("#tint-" + channel));
+  const basePicker = createHsvPicker(document.querySelector("#wheel-panel"),
+    { hue:205, saturation:70, value:92 }, ({ hue, hex }, rgb) => {
+      const root = document.documentElement;
+      root.style.setProperty("--custom-hue", String(hue));
+      root.style.setProperty("--picked-color", hex);
+      // Map shadows, body and highlights separately while preserving alpha.
+      for (const [index, channel] of rgb.entries()) {
+        const body = .045 + .86 * channel;
+        const shadow = body * .42;
+        const highlight = body + (1 - body) * .48;
+        tintChannels[index].setAttribute("tableValues", [0, shadow, body, highlight, 1].join(" "));
+      }
+    }, () => {
+      if (flavor === "custom") return;
+      chooseFlavor("custom", false);
+      reaction.textContent = "果冻猫换上了你选的颜色。";
+      stopSound();
+    });
+  const brushPanel = document.querySelector("#brush-wheel-panel");
+  const brushPicker = createHsvPicker(brushPanel, hexToHsv("#FFF4C7"), ({ hex }) => {
+    paintColor.style.setProperty("--brush-color", hex);
+    paintColor.setAttribute("aria-label", "笔色 " + hex);
+  }, () => {
+    erasing = false;
+    paintEraser.setAttribute("aria-pressed", "false");
+  });
+  paintColor.addEventListener("click", () => {
+    brushPanel.hidden = !brushPanel.hidden;
+    paintColor.setAttribute("aria-expanded", String(!brushPanel.hidden));
   });
 
-  trackPickerPointer(svPlane, (event) => {
-    const box = svPlane.getBoundingClientRect();
-    const saturation = (event.clientX - box.left) / box.width * 100;
-    const value = (1 - (event.clientY - box.top) / box.height) * 100;
-    pickColor(customHue, saturation, value);
-  });
-
-  const pickSliders = () => pickColor(customHue, Number(saturationInput.value), Number(valueInput.value));
-  saturationInput.addEventListener("input", pickSliders);
-  valueInput.addEventListener("input", pickSliders);
-  wheel.addEventListener("keydown", (event) => {
-    const increment = { ArrowRight:1, ArrowUp:1, ArrowLeft:-1, ArrowDown:-1, PageUp:15, PageDown:-15 }[event.key];
-    if (increment === undefined && event.key !== "Home" && event.key !== "End") return;
-    event.preventDefault();
-    const hue = event.key === "Home" ? 0 : event.key === "End" ? 359 : customHue + increment * (event.shiftKey ? 10 : 1);
-    pickColor(hue, customSaturation, customValue);
-  });
   function restoreSavedCat() {
     let saved;
     try { saved = JSON.parse(document.querySelector("#jelly-save-state").textContent); }
@@ -1418,9 +1451,7 @@ h1 span { display:block; white-space:nowrap; }
     if (saved?.version !== 1) return;
 
     const { hue, saturation, value } = saved;
-    if (Number.isInteger(hue) && hue >= 0 && hue < 360) customHue = hue;
-    if (Number.isInteger(saturation) && saturation >= 0 && saturation <= 100) customSaturation = saturation;
-    if (Number.isInteger(value) && value >= 0 && value <= 100) customValue = value;
+    if ([hue, saturation, value].every(Number.isFinite)) basePicker.set({ hue, saturation, value });
     if (Object.hasOwn(flavors, saved.flavor)) chooseFlavor(saved.flavor, false);
     if (Number.isSafeInteger(saved.count) && saved.count >= 0) {
       count = saved.count;
@@ -1428,7 +1459,7 @@ h1 span { display:block; white-space:nowrap; }
     }
 
     const isColor = (color) => typeof color === "string" && /^#[\da-f]{6}$/i.test(color);
-    if (isColor(saved.brushColor)) paintColor.value = saved.brushColor;
+    if (isColor(saved.brushColor)) brushPicker.set(hexToHsv(saved.brushColor));
     if (Number.isFinite(saved.brushSize)) paintSize.value = String(saved.brushSize);
     if (Array.isArray(saved.strokes)) {
       for (const stroke of saved.strokes) {
@@ -1447,9 +1478,10 @@ h1 span { display:block; white-space:nowrap; }
   }
 
   function downloadCat() {
+    const { hue, saturation, value } = basePicker.color;
     const snapshot = JSON.stringify({
-      version:1, flavor, hue:customHue, saturation:customSaturation, value:customValue, count, strokes,
-      brushColor:paintColor.value, brushSize:Number(paintSize.value)
+      version:1, flavor, hue, saturation, value, count, strokes,
+      brushColor:brushPicker.color.hex, brushSize:Number(paintSize.value)
     }).replace(/</g, "\\u003c");
     const html = exportTemplate.replace(
       /(<script id="jelly-save-state" type="application\/json">)[^<]*/,
@@ -1468,7 +1500,6 @@ h1 span { display:block; white-space:nowrap; }
 
   document.querySelector("#save-html").addEventListener("click", downloadCat);
   restoreSavedCat();
-  updatePicker();
 
   soundButton.addEventListener("click", () => {
     stopSound();
