@@ -910,20 +910,21 @@ h1 span { display:block; white-space:nowrap; }
         const p = (row * width + column) * 4;
         if (!paint[p + 3]) continue;
         const src = ((y + row) * size + x + column) * 4;
-        paint[p + 3] *= mask[src + 3] / 255;
-        if (!paint[p + 3]) continue;
-
-        const value = Math.max(paint[p], paint[p + 1], paint[p + 2]);
+        // Pigment fades with the transparent silhouette; facial features have zero coverage.
+        const coverage = mask[src + 3] / 255;
         const tone = (texture[src] * .2126 + texture[src + 1] * .7152 + texture[src + 2] * .0722) / 255;
-        // Keep the selected value dominant and borrow a restrained light-and-shadow range.
-        const contrast = tone - .48;
-        const lit = value * (.92 + contrast * (contrast < 0 ? .34 : .15));
-        const reflection = (1 - value / 255) * (3 + 27 * tone * tone);
-        const shaded = lit + reflection;
-        // Scale channels together so highlights carry the same hue as the shadow.
-        // Black keeps only a small neutral reflection from the original texture.
+        paint[p + 3] *= coverage * coverage * (.95 - .15 * tone);
+        if (!paint[p + 3]) continue;
+        // Overlay against the texture's neutral lightness so the base flavor does not skew the hue.
+        const base = Math.max(0, tone - .02);
+        const pigmentValue = Math.max(paint[p], paint[p + 1], paint[p + 2]) / 255;
+        const reflection = 7 * tone * tone * (1 - pigmentValue);
         for (let channel = 0; channel < 3; channel += 1) {
-          paint[p + channel] = value ? paint[p + channel] / value * shaded : shaded;
+          const brush = paint[p + channel];
+          const overlay = base < .5
+            ? 2 * base * brush
+            : 255 - 2 * (1 - base) * (255 - brush);
+          paint[p + channel] = brush * .14 + overlay * .86 + reflection;
         }
       }
     }
