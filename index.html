@@ -264,10 +264,11 @@ h1 span { display:block; white-space:nowrap; }
 .wheel-swatch { flex:0 0 13px; height:13px; border:1px solid #223b8b55; border-radius:50%; background:var(--picked-color); }
 @media (max-width:760px) { .color-custom { margin-top:12px; } }
 
-/* The paint layer shares the body's motion and keeps its own pigment colors. */
+/* Blend dye with the lit texture inside the cat, independently of the stage. */
+.cat-visual { isolation:isolate; }
 .cat-visual img,.cat-canvas { filter:var(--cat-filter); transition:filter 230ms ease; }
 :root[data-flavor="custom"] :is(.cat-visual img,.cat-canvas) { transition:none; }
-.ink-canvas { position:absolute; inset:-20%; width:140%; height:140%; opacity:.88; pointer-events:none; }
+.ink-canvas { position:absolute; inset:-20%; width:140%; height:140%; mix-blend-mode:color; pointer-events:none; }
 .stage.is-painting,.stage.is-painting .cat { cursor:crosshair; touch-action:none; }
 .stage.is-painting .stamp { transform:none; }
 .paint-toggle,.paint-tools button {
@@ -633,8 +634,8 @@ h1 span { display:block; white-space:nowrap; }
       faces.set(expression, pixels);
     }
     const texture = faces.get(expression);
+    if (surface.ink && surface.ink.expression !== expression) renderInk(surface, expression);
     if (surface.expression !== expression) {
-      restoreInk();
       warped.data.set(texture);
       context.putImageData(warped, 0, 0);
       surface.expression = expression;
@@ -652,7 +653,10 @@ h1 span { display:block; white-space:nowrap; }
     visual.classList.add("is-deforming");
     tapTimeout = setTimeout(() => {
       tapTimeout = 0;
-      if (!motion) visual.classList.remove("is-deforming");
+      if (!motion) {
+        visual.classList.remove("is-deforming");
+        if (surface?.ink) renderInk(surface);
+      }
     }, 290);
   }
 
@@ -762,7 +766,8 @@ h1 span { display:block; white-space:nowrap; }
   }
 
   function clearDeformation() {
-    restoreInk();
+    if (surface?.ink && surface.ink.expression !== "rest") renderInk(surface);
+    else restoreInk();
     cancelAnimationFrame(frame);
     clearTimeout(tapTimeout);
     tapTimeout = 0;
@@ -850,14 +855,58 @@ h1 span { display:block; white-space:nowrap; }
     }
   }
 
-  function renderInk(buffer) {
-    const { side, padding, size, ink } = buffer;
+  function dyeMask(buffer, expression) {
+    const { ink, original, size } = buffer;
+    if (ink.masks.has(expression)) return ink.masks.get(expression);
+    const mask = document.createElement("canvas");
+    mask.width = mask.height = size;
+    const context = mask.getContext("2d");
+    if (!ink.material) {
+      // The brightest, least colored reflections take up less dye.
+      ink.material = context.createImageData(size, size);
+      const pixels = ink.material.data;
+      for (let p = 0; p < original.length; p += 4) {
+        const white = Math.min(original[p], original[p + 1], original[p + 2]);
+        const gloss = Math.max(0, Math.min(1, (white - 155) / 82));
+        pixels[p + 3] = original[p + 3] * (1 - gloss * gloss * (3 - 2 * gloss));
+      }
+      ink.profiles = faceMarks.map((mark) => sampleMark(mark, buffer));
+    }
+    context.putImageData(ink.material, 0, 0);
+    context.globalCompositeOperation = "destination-out";
+    context.lineCap = context.lineJoin = "round";
+    const bentMarks = expression === "drag" ? 3 : expression === "tap" ? 2 : 0;
+    for (const [index, mark] of faceMarks.entries()) {
+      const profile = ink.profiles[index];
+      if (index < bentMarks) {
+        context.lineWidth = mark.radius * buffer.side / 1254 * 2 + 3;
+        context.beginPath();
+        for (const [point, [x, y]] of mark.path.entries()) {
+          if (point === 0) context.moveTo(profile.place(x), profile.place(y));
+          else context.lineTo(profile.place(x), profile.place(y));
+        }
+        context.stroke();
+        continue;
+      }
+      for (let column = profile.first; column <= profile.last; column += 1) {
+        const top = profile.tops[column], bottom = profile.bottoms[column];
+        if (bottom < top) continue;
+        context.fillRect(profile.x0 + column - 1, top - 2, 3, bottom - top + 5);
+      }
+    }
+    ink.masks.set(expression, mask);
+    return mask;
+  }
+
+  function renderInk(buffer, expression = "rest") {
+    const { size, ink } = buffer;
     const context = ink.display;
     context.clearRect(0, 0, size, size);
     context.drawImage(ink.source.canvas, 0, 0);
     context.globalCompositeOperation = "destination-in";
-    context.drawImage(art, padding, padding, side, side);
+    context.drawImage(dyeMask(buffer, expression), 0, 0);
     context.globalCompositeOperation = "source-over";
+    ink.expression = expression;
     ink.texture = null;
     ink.warped = null;
     ink.dirty = false;
@@ -877,7 +926,7 @@ h1 span { display:block; white-space:nowrap; }
       context.lineCap = "round";
       context.rect(padding, padding, side, side);
       context.clip();
-      buffer.ink = { source:context, display:inkCanvas.getContext("2d", { willReadFrequently:true }) };
+      buffer.ink = { source:context, display:inkCanvas.getContext("2d", { willReadFrequently:true }), masks:new Map() };
     }
     buffer.ink.source.clearRect(0, 0, size, size);
     for (const stroke of strokes) {
@@ -922,7 +971,7 @@ h1 span { display:block; white-space:nowrap; }
       if (stage.hasPointerCapture(id)) stage.releasePointerCapture(id);
       syncPaintHistory();
     }
-    reaction.textContent = painting ? "选好笔色，就可以在猫身上画了。" : "轻戳一下，看看彩绘怎么动。";
+    reaction.textContent = painting ? "选好笔色，在猫身上局部染色。" : "轻戳一下，看看彩绘怎么动。";
   }
 
   paintToggle.addEventListener("click", () => setPainting(!painting));
