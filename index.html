@@ -919,11 +919,12 @@ h1 span { display:block; white-space:nowrap; }
     for (const [index, mark] of faceMarks.entries()) {
       const profile = ink.profiles[index];
       if (index < bentMarks) {
-        context.lineWidth = mark.radius * buffer.side / 1254 * 2 + 3;
+        // Match the visible expression stroke instead of reserving surrounding jelly.
+        context.lineWidth = mark.radius * buffer.side / 1254 * 2 + .1;
         context.beginPath();
         for (const [point, [x, y]] of mark.path.entries()) {
-          if (point === 0) context.moveTo(profile.place(x), profile.place(y));
-          else context.lineTo(profile.place(x), profile.place(y));
+          if (point === 0) context.moveTo(profile.place(x) + .5, profile.place(y) + .5);
+          else context.lineTo(profile.place(x) + .5, profile.place(y) + .5);
         }
         context.stroke();
         continue;
@@ -931,7 +932,7 @@ h1 span { display:block; white-space:nowrap; }
       for (let column = profile.first; column <= profile.last; column += 1) {
         const top = profile.tops[column], bottom = profile.bottoms[column];
         if (bottom < top) continue;
-        context.fillRect(profile.x0 + column - 1, top - 2, 3, bottom - top + 5);
+        context.fillRect(profile.x0 + column, top, 1, bottom - top + 1);
       }
     }
     const pixels = context.getImageData(0, 0, size, size).data;
