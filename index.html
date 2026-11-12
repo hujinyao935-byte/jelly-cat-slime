@@ -56,6 +56,11 @@ button:focus-visible { outline:3px solid var(--ink-dark); outline-offset:4px; }
   border:1px solid var(--ink); border-radius:30px; background:transparent; cursor:pointer; padding:7px 13px;
   font-size:.83rem; font-weight:720; white-space:nowrap;
 }
+.masthead-actions { display:flex; align-items:center; gap:7px; }
+.save-html { box-shadow:0 2px 0 var(--ink); }
+.save-html:focus-visible { outline:3px solid var(--ink); outline-offset:3px; }
+.save-icon { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+@media (max-width:360px) { .masthead-actions { gap:5px; } }
 .sound:hover,.sound[aria-pressed="true"] { background:var(--ink); color:var(--cream); }
 .sound-bars { display:flex; align-items:center; gap:2px; height:15px; }
 .sound-bars i { display:block; width:2px; height:5px; border-radius:2px; background:currentColor; }
@@ -317,10 +322,15 @@ h1 span { display:block; white-space:nowrap; }
 </svg>
 <header class="frame masthead">
   <div class="wordmark"><span class="logo-icon" aria-hidden="true"><i></i></span> Jelly Parlor</div>
-  <button type="button" class="sound" id="sound" aria-pressed="false">
-    <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
-    <span id="sound-label">音效关</span>
-  </button>
+  <div class="masthead-actions">
+    <button type="button" class="sound" id="sound" aria-pressed="false">
+      <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span id="sound-label">音效关</span>
+    </button>
+    <button type="button" class="sound save-html" id="save-html" aria-label="保存 HTML 到本机">
+      <svg class="save-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5v10m-4-4 4 4 4-4M3.5 13v4h13v-4"/></svg>保存
+    </button>
+  </div>
 </header>
 <main class="frame counter-top">
   <section class="intro" aria-labelledby="title">
@@ -387,8 +397,10 @@ h1 span { display:block; white-space:nowrap; }
     </details>
   </section>
 </main>
+<script id="jelly-save-state" type="application/json">{}</script>
 <script>
 (() => {
+  const exportTemplate = document.documentElement.outerHTML;
   const stage = document.querySelector("#stage");
   const cat = document.querySelector("#cat");
   const art = document.querySelector("#cat-art");
@@ -1399,6 +1411,63 @@ h1 span { display:block; white-space:nowrap; }
     const hue = event.key === "Home" ? 0 : event.key === "End" ? 359 : customHue + increment * (event.shiftKey ? 10 : 1);
     pickColor(hue, customSaturation, customValue);
   });
+  function restoreSavedCat() {
+    let saved;
+    try { saved = JSON.parse(document.querySelector("#jelly-save-state").textContent); }
+    catch { return; }
+    if (saved?.version !== 1) return;
+
+    const { hue, saturation, value } = saved;
+    if (Number.isInteger(hue) && hue >= 0 && hue < 360) customHue = hue;
+    if (Number.isInteger(saturation) && saturation >= 0 && saturation <= 100) customSaturation = saturation;
+    if (Number.isInteger(value) && value >= 0 && value <= 100) customValue = value;
+    if (Object.hasOwn(flavors, saved.flavor)) chooseFlavor(saved.flavor, false);
+    if (Number.isSafeInteger(saved.count) && saved.count >= 0) {
+      count = saved.count;
+      countDisplay.value = String(count);
+    }
+
+    const isColor = (color) => typeof color === "string" && /^#[\da-f]{6}$/i.test(color);
+    if (isColor(saved.brushColor)) paintColor.value = saved.brushColor;
+    if (Number.isFinite(saved.brushSize)) paintSize.value = String(saved.brushSize);
+    if (Array.isArray(saved.strokes)) {
+      for (const stroke of saved.strokes) {
+        if (stroke && isColor(stroke.color) && typeof stroke.erase === "boolean" &&
+            Number.isFinite(stroke.width) && stroke.width > 0 && stroke.width <= .1 &&
+            Array.isArray(stroke.points) && stroke.points.length &&
+            stroke.points.every((point) => Number.isFinite(point?.u) && Number.isFinite(point?.v))) {
+          strokes.push(stroke);
+        }
+      }
+    }
+    if (strokes.length) {
+      syncPaintHistory();
+      if (!prepareSurface()) art.addEventListener("load", () => prepareSurface(), { once:true });
+    }
+  }
+
+  function downloadCat() {
+    const snapshot = JSON.stringify({
+      version:1, flavor, hue:customHue, saturation:customSaturation, value:customValue, count, strokes,
+      brushColor:paintColor.value, brushSize:Number(paintSize.value)
+    }).replace(/</g, "\\u003c");
+    const html = exportTemplate.replace(
+      /(<script id="jelly-save-state" type="application\/json">)[^<]*/,
+      (_, marker) => marker + snapshot
+    );
+    const url = URL.createObjectURL(new Blob(["<!doctype html>\n", html], { type:"text/html;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.download = "果冻猫史莱姆-" + timestamp + ".html";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  document.querySelector("#save-html").addEventListener("click", downloadCat);
+  restoreSavedCat();
   updatePicker();
 
   soundButton.addEventListener("click", () => {
