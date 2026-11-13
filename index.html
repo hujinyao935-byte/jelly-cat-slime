@@ -1047,6 +1047,17 @@ h1 span { display:block; white-space:nowrap; }
     paintEraser.setAttribute("aria-pressed", String(erasing));
   });
 
+  function updatePaintHistory(clearAll) {
+    if (pen || !strokes.length) return;
+    if (clearAll) strokes.length = 0;
+    else strokes.pop();
+    if (surface) rebuildInk(surface);
+    syncPaintHistory();
+  }
+
+  paintUndo.addEventListener("click", () => updatePaintHistory(false));
+  paintClear.addEventListener("click", () => updatePaintHistory(true));
+
   function brushPoint(event) {
     const { u, v } = touchOrigin(event.clientX, event.clientY);
     return { u:Math.max(-1, Math.min(2, u)), v:Math.max(-1, Math.min(2, v)) };
